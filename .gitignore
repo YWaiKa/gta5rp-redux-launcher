@@ -1,0 +1,14 @@
+node_modules
+dist
+out
+.DS_Store
+*.log
+.eslintcache
+.vite
+release/
+build/win-unpacked
+build/*.exe
+build/*.zip
+build/*.blockmap
+build/builder-effective-config.yaml
+build/latest*.yml
