@@ -1,63 +1,63 @@
 # GTA 5 RP Redux Launcher
 
-A Windows desktop launcher that lets users browse a shared online catalog of GTA 5 RP reduxes (graphics presets, mods, ENBs, etc.) and install or revert them in one click.
+Лаунчер для рабочего стола Windows, который позволяет пользователям просматривать общий онлайн-каталог обновлений GTA 5 RP (графические настройки, моды, дополнения и т.д.) и устанавливать или отменять их одним щелчком мыши.
 
-![tech](https://img.shields.io/badge/Electron-39-blue)
-![tech](https://img.shields.io/badge/React-19-blue)
-![tech](https://img.shields.io/badge/TypeScript-5-blue)
+![технология](https://img.shields.io/badge/Electron-39-blue)
+![технология](https://img.shields.io/badge/React-19-blue)
+![технология](https://img.shields.io/badge/TypeScript-5-blue)
 
-## Features
+## Особенности
 
-- **Card-based UI** with a dark theme and an in-app accent-color picker (presets + custom HEX).
-- **Online catalog** — categories, reduxes, descriptions and cover images are read from a public GitHub repository (`YWaiKa/gta5rp-redux-launcher-data`). Every user sees the same thing without any backend server.
-- **One-click install** — downloads the redux `.zip` from a GitHub Release, extracts it into the GTA folder at a configurable subpath.
-- **Reversible installs** — every replaced file is renamed to `<file>.reduxbak` before being overwritten. The *Revert* button deletes our additions and restores the originals.
-- **Installed list** with revert buttons.
-- **Admin panel** for the catalog owner — log in with a GitHub Personal Access Token, create categories, upload reduxes (+ cover + description), set their default install target. The launcher uploads the asset to GitHub Releases and patches `data.json` so other users immediately see the new entry.
-- **Offline-friendly** — last fetched catalog is cached locally.
+- **Пользовательский интерфейс на основе карточек** с темной тематикой и возможностью выбора цвета акцента в приложении (предустановки + пользовательский шестнадцатеричный код).
+- **Онлайн—каталог** - категории, дополнения, описания и изображения обложек доступны из общедоступного репозитория на GitHub (`YWaiKa/gta5rp-redux-launcher-data`). Каждый пользователь видит одно и то же без какого-либо внутреннего сервера.
+- **Установка в один клик** - загружает redux `.zip` из релиза на GitHub, извлекает его в папку GTA по настраиваемому подпути.
+- **Обратимая установка** — каждый замененный файл перед перезаписью переименовывается в `<файл>.reduxbak`. Кнопка "Вернуть" удаляет наши дополнения и восстанавливает исходные.
+- **Список установленных файлов** с кнопками возврата.
+- **Панель администратора** для владельца каталога — войдите в систему с помощью персонального токена доступа на GitHub, создайте категории, загрузите редьюксы (+ обложка + описание), установите цель их установки по умолчанию. Программа запуска загружает ресурс в GitHub Releases и patches `data.json`, чтобы другие пользователи сразу увидели новую запись.
+- **Работает в автономном режиме** - последний загруженный каталог кэшируется локально.
 
-## How the backend works (no paid services)
+## Как работает серверная часть (без платных сервисов)
 
-- `data.json` lives in `YWaiKa/gta5rp-redux-launcher-data` and is served from `raw.githubusercontent.com`. The launcher reads it anonymously, so end-users don't need GitHub at all.
-- Each published redux gets its own GitHub Release on that data repo. The `.zip` and `cover.png` are uploaded as release assets — GitHub Releases storage is effectively unlimited and free.
-- Only the admin (you) needs a GitHub PAT, and the token is stored locally on your machine, never shipped to other users.
+- Файл `data.json` хранится в `YWaiKa/gta5rp-redux-launcher-data` и обслуживается из `raw.githubusercontent.com`. Программа запуска читает его анонимно, поэтому конечным пользователям GitHub вообще не нужен.
+- Каждый опубликованный redux получает свой собственный релиз на GitHub в этом хранилище данных. Файлы `.zip` и `cover.png` загружаются в качестве ресурсов для релизов — хранилище релизов на GitHub фактически неограниченно и бесплатно.
+- Доступ к GitHub PAT нужен только администратору (вам), а токен хранится локально на вашем компьютере и никогда не передается другим пользователям.
 
 ## Project structure
 
 ```
 src/
-  main/         Electron main process — store, installer, GitHub admin
-  preload/      Context-isolated bridge exposing window.api to the renderer
-  renderer/     React UI (cards, sidebar, settings, admin modal)
-  shared/       Types + IPC channel names shared by main and renderer
+  main/         Основной процесс Electron — хранилище, установщик, администратор GitHub
+  preload/      Изолированный от контекста мост, предоставляющий window.api для средства визуализации
+  renderer/     Пользовательский интерфейс React (карточки, боковая панель, настройки, режим администратора)
+  shared/       Типы + названия IPC-каналов, совместно используемые основным каналом и каналом визуализации
 build/
-electron-builder.yml   Windows installer + portable build configuration
+electron-builder.yml  Установщик Windows + конфигурация переносимой сборки
 electron.vite.config.ts
 ```
 
-## Development
+## Разработка
 
 ```bash
 npm install
-npm run dev          # launches the app with HMR
+npm run dev          # Запускает приложение с помощью HMR
 npm run typecheck
 npm run lint
 ```
 
-## Building a Windows installer
+## Билд Windows загрузчика
 
 ```bash
 npm run build:win
 ```
 
-The output is written to `dist/`. The default electron-builder configuration produces an NSIS installer (`.exe`).
+Выходные данные записываются в `dist/`. Конфигурация electron-builder по умолчанию создает установщик NSIS (`.exe`).
 
-## Configuration
+## Конфигурация
 
-On first launch the user is asked to pick the GTA V root folder (the one containing `GTA5.exe`). All install paths in `data.json` are interpreted relative to this folder.
+При первом запуске пользователю предлагается выбрать корневую папку GTA V (ту, которая содержит `GTA5.exe`). Все пути установки в `data.json` интерпретируются относительно этой папки.
 
-The default backend repo is `YWaiKa/gta5rp-redux-launcher-data`. It can be changed at any time in **Settings → Backend repository**.
+Серверным репозиторием по умолчанию является `YWaiKa/gta5rp-redux-launcher-data`. Это можно изменить в любое время в **Settings → Backend repository**.
 
-## License
+## Лицензия
 
 MIT
