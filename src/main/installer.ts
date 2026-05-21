@@ -97,6 +97,17 @@ export async function installRedux(redux: Redux): Promise<InstalledRedux> {
   if (!isPathInside(gtaRoot, targetRoot) && targetRoot !== gtaRoot) {
     throw new Error('Install target must be inside the GTA root folder.')
   }
+  // Guard against the common pitfall of pointing installTarget at an existing
+  // file (e.g. `update/x64/dlcpacks/patchday18ng/dlc.rpf`). Without this, mkdir
+  // throws a raw `EEXIST: file already exists` which is confusing.
+  const targetStat = await fs.stat(targetRoot).catch(() => null)
+  if (targetStat && !targetStat.isDirectory()) {
+    throw new Error(
+      `Install target "${redux.installTarget}" points at an existing file, not a folder. ` +
+        `The install target must be a directory — open Admin → Edit redux and set it to the ` +
+        `enclosing folder (the .zip itself should contain the file you want to replace).`
+    )
+  }
   await fs.mkdir(targetRoot, { recursive: true })
 
   // Stage download + extraction in a tmp dir.

@@ -336,12 +336,15 @@ function ReduxTab({
         <label>Install target (relative to GTA folder)</label>
         <input
           value={installTarget}
-          placeholder='leave empty for GTA root — or e.g. "mods/x64v.rpf"'
+          placeholder='leave empty for GTA root — or e.g. "update/x64/dlcpacks/patchday18ng"'
           onChange={(e) => setInstallTarget(e.target.value)}
         />
         <div className="hint">
-          The contents of the zip will be extracted into this subfolder of the user&apos;s GTA root.
-          Use forward slashes.
+          Must be a <strong>folder</strong> — the contents of the zip will be extracted into it. Use
+          forward slashes. To replace a single file like
+          <code> update/x64/dlcpacks/patchday18ng/dlc.rpf</code>, set this to the enclosing folder (
+          <code>update/x64/dlcpacks/patchday18ng</code>) and put <code>dlc.rpf</code> at the root of
+          the zip. Or leave empty and put the full path inside the zip.
         </div>
       </div>
       <div className="row">
@@ -536,8 +539,8 @@ function EditReduxModal({
         <label>Install target (relative to GTA folder)</label>
         <input value={installTarget} onChange={(e) => setInstallTarget(e.target.value)} />
         <div className="hint">
-          Changing this only affects future installations — already-installed copies are unaffected
-          until users revert and re-install.
+          Must be a <strong>folder</strong> (not a single file). Changing this only affects future
+          installations — already-installed copies are unaffected until users revert and re-install.
         </div>
       </div>
       <div className="row">
