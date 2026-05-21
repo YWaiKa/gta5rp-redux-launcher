@@ -20,6 +20,7 @@ function App(): React.JSX.Element {
     dataError,
     reloadData,
     reloadInstalled,
+    reloadConfig,
     updateConfig,
     installRedux,
     uninstallRedux,
@@ -49,6 +50,7 @@ function App(): React.JSX.Element {
   async function pickGtaFolder(): Promise<void> {
     const picked = await window.api.config.pickGtaFolder()
     if (picked) {
+      await reloadConfig()
       pushToast({ kind: 'success', title: 'GTA folder set', body: picked })
     }
   }

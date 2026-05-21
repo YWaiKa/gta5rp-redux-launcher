@@ -8,7 +8,8 @@ import type {
   PublishReduxInput,
   Redux,
   RemoteData,
-  Category
+  Category,
+  UpdateReduxInput
 } from '../shared/types'
 
 interface PickFileArgs {
@@ -46,6 +47,8 @@ const api = {
       input: PublishReduxInput
     ): Promise<{ downloadUrl: string; coverUrl?: string; id: string }> =>
       ipcRenderer.invoke(IPC.publishRedux, input),
+    updateRedux: (input: UpdateReduxInput): Promise<{ downloadUrl?: string; coverUrl?: string }> =>
+      ipcRenderer.invoke(IPC.updateRedux, input),
     deleteRedux: (id: string): Promise<void> => ipcRenderer.invoke(IPC.deleteRedux, id)
   }
 }

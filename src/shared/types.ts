@@ -103,3 +103,22 @@ export interface PublishCategoryInput {
   name: string
   order?: number
 }
+
+/**
+ * Inputs for editing an already-published redux. Any field left as `undefined`
+ * keeps its existing value. Pass a new `zipPath` / `coverPath` to upload a
+ * replacement asset to the existing GitHub Release; pass `removeCover: true`
+ * to drop the cover image from the catalog entry.
+ */
+export interface UpdateReduxInput {
+  reduxId: string
+  categoryId?: string
+  name?: string
+  description?: string
+  installTarget?: string
+  version?: string
+  author?: string
+  zipPath?: string
+  coverPath?: string
+  removeCover?: boolean
+}

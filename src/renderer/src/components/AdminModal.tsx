@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AppConfig, Category, RemoteData } from '../../../shared/types'
+import type { AppConfig, Category, Redux, RemoteData } from '../../../shared/types'
 import { Modal } from './Modal'
 import { Icon } from './Icon'
 
@@ -214,6 +214,7 @@ function ReduxTab({
   onDataChanged: () => Promise<void>
   pushToast: AdminModalProps['pushToast']
 }): React.JSX.Element {
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [categoryId, setCategoryId] = useState<string>('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -395,6 +396,9 @@ function ReduxTab({
                     {r.version ?? '—'}
                   </div>
                 </div>
+                <button className="icon-btn" aria-label="Edit" onClick={() => setEditingId(r.id)}>
+                  <Icon name="edit" />
+                </button>
                 <button className="icon-btn danger" onClick={() => deleteOne(r.id, r.name)}>
                   <Icon name="trash" />
                 </button>
@@ -403,6 +407,204 @@ function ReduxTab({
           </div>
         </div>
       )}
+
+      {editingId &&
+        data &&
+        (() => {
+          const target = data.reduxes.find((r) => r.id === editingId)
+          if (!target) return null
+          return (
+            <EditReduxModal
+              redux={target}
+              categories={categories}
+              onClose={() => setEditingId(null)}
+              onSaved={async () => {
+                await onDataChanged()
+                setEditingId(null)
+              }}
+              pushToast={pushToast}
+            />
+          )
+        })()}
     </>
+  )
+}
+
+function EditReduxModal({
+  redux,
+  categories,
+  onClose,
+  onSaved,
+  pushToast
+}: {
+  redux: Redux
+  categories: Category[]
+  onClose: () => void
+  onSaved: () => Promise<void>
+  pushToast: AdminModalProps['pushToast']
+}): React.JSX.Element {
+  const [categoryId, setCategoryId] = useState(redux.categoryId)
+  const [name, setName] = useState(redux.name)
+  const [description, setDescription] = useState(redux.description ?? '')
+  const [installTarget, setInstallTarget] = useState(redux.installTarget)
+  const [version, setVersion] = useState(redux.version ?? '')
+  const [author, setAuthor] = useState(redux.author ?? '')
+  const [zipPath, setZipPath] = useState<string | null>(null)
+  const [coverPath, setCoverPath] = useState<string | null>(null)
+  const [removeCover, setRemoveCover] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function pickZip(): Promise<void> {
+    const p = await window.api.dialog.pickFile({
+      title: 'Select replacement .zip',
+      filters: [{ name: 'Zip archive', extensions: ['zip'] }]
+    })
+    if (p) setZipPath(p)
+  }
+
+  async function pickCover(): Promise<void> {
+    const p = await window.api.dialog.pickFile({
+      title: 'Select replacement cover',
+      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+    })
+    if (p) {
+      setCoverPath(p)
+      setRemoveCover(false)
+    }
+  }
+
+  async function save(): Promise<void> {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      await window.api.admin.updateRedux({
+        reduxId: redux.id,
+        categoryId,
+        name: name.trim(),
+        description,
+        installTarget,
+        version,
+        author,
+        zipPath: zipPath ?? undefined,
+        coverPath: coverPath ?? undefined,
+        removeCover: removeCover && !coverPath ? true : undefined
+      })
+      pushToast({ kind: 'success', title: 'Redux updated' })
+      await onSaved()
+    } catch (err) {
+      pushToast({
+        kind: 'error',
+        title: 'Update failed',
+        body: err instanceof Error ? err.message : String(err)
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={`Edit "${redux.name}"`} onClose={onClose} wide>
+      <div className="field">
+        <label>Category</label>
+        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          {categories.map((c) => (
+            <option value={c.id} key={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="row">
+        <div className="field">
+          <label>Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Version</label>
+          <input value={version} onChange={(e) => setVersion(e.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <label>Author (optional)</label>
+        <input value={author} onChange={(e) => setAuthor(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>Description</label>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>Install target (relative to GTA folder)</label>
+        <input value={installTarget} onChange={(e) => setInstallTarget(e.target.value)} />
+        <div className="hint">
+          Changing this only affects future installations — already-installed copies are unaffected
+          until users revert and re-install.
+        </div>
+      </div>
+      <div className="row">
+        <div className="field">
+          <label>Replacement .zip (optional)</label>
+          <div className="path-row">
+            <div className="path" title={zipPath ?? ''}>
+              {zipPath ?? '— keep current —'}
+            </div>
+            <button className="icon-btn has-label" onClick={pickZip}>
+              <Icon name="box" /> Pick
+            </button>
+            {zipPath && (
+              <button
+                className="icon-btn ghost"
+                onClick={() => setZipPath(null)}
+                aria-label="Clear"
+              >
+                <Icon name="close" />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="field">
+          <label>Replacement cover (optional)</label>
+          <div className="path-row">
+            <div className="path" title={coverPath ?? ''}>
+              {coverPath ?? (redux.coverUrl && !removeCover ? '— keep current —' : '— none —')}
+            </div>
+            <button className="icon-btn has-label" onClick={pickCover}>
+              <Icon name="image" /> Pick
+            </button>
+            {coverPath && (
+              <button
+                className="icon-btn ghost"
+                onClick={() => setCoverPath(null)}
+                aria-label="Clear"
+              >
+                <Icon name="close" />
+              </button>
+            )}
+          </div>
+          {redux.coverUrl && !coverPath && (
+            <label className="hint" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={removeCover}
+                onChange={(e) => setRemoveCover(e.target.checked)}
+              />
+              Remove existing cover
+            </label>
+          )}
+        </div>
+      </div>
+      <div className="row" style={{ marginTop: 6 }}>
+        <button className="btn primary" disabled={saving || !name.trim()} onClick={save}>
+          {saving ? <span className="spinner" /> : <Icon name="check" />}
+          Save changes
+        </button>
+        <button className="btn ghost" disabled={saving} onClick={onClose}>
+          Cancel
+        </button>
+        <div className="hint">
+          Replacement files are uploaded as new assets on the existing GitHub Release. Old assets
+          stay there so anyone who already downloaded the old URL keeps working.
+        </div>
+      </div>
+    </Modal>
   )
 }

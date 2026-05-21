@@ -9,7 +9,8 @@ import type {
   PublishCategoryInput,
   PublishReduxInput,
   Redux,
-  RemoteData
+  RemoteData,
+  UpdateReduxInput
 } from '../shared/types'
 import { readConfig, readManifest, updateConfig } from './store'
 import { installRedux, openGtaFolder, uninstallRedux } from './installer'
@@ -20,6 +21,7 @@ import {
   fetchRemoteData,
   publishCategory,
   publishRedux,
+  updateRedux,
   verifyToken
 } from './github'
 
@@ -119,6 +121,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
   )
   ipcMain.handle(IPC.deleteCategory, async (_e, id: string): Promise<void> => deleteCategory(id))
   ipcMain.handle(IPC.publishRedux, async (_e, input: PublishReduxInput) => publishRedux(input))
+  ipcMain.handle(IPC.updateRedux, async (_e, input: UpdateReduxInput) => updateRedux(input))
   ipcMain.handle(IPC.deleteRedux, async (_e, id: string): Promise<void> => deleteRedux(id))
 }
 

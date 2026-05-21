@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { promises as fs } from 'node:fs'
 import { createWriteStream } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import extract from 'extract-zip'
 import type { InstalledFile, InstalledRedux, Redux } from '../shared/types'
@@ -63,7 +63,12 @@ async function listDirsInOrder(root: string, extractedRoot: string): Promise<str
 
 function isPathInside(parent: string, child: string): boolean {
   const rel = relative(parent, child)
-  return !rel.startsWith('..') && !resolve(rel).startsWith('..') && !rel.split(sep).includes('..')
+  // On Windows, when `parent` and `child` are on different drives, `path.relative`
+  // returns an absolute path instead of one prefixed with `..`. Reject any absolute
+  // result outright so cross-drive paths can't bypass the check.
+  if (isAbsolute(rel)) return false
+  if (rel === '') return true
+  return !rel.startsWith('..') && !rel.split(sep).includes('..')
 }
 
 async function downloadToFile(url: string, dest: string): Promise<void> {
@@ -101,14 +106,24 @@ export async function installRedux(redux: Redux): Promise<InstalledRedux> {
   const extractedDir = join(workDir, 'extracted')
   await fs.mkdir(extractedDir, { recursive: true })
 
+  // Incremental manifest so we can roll back from disk even if install fails
+  // mid-way (e.g. user cancels, disk fills, antivirus quarantines a file).
+  const installed: InstalledFile[] = []
+  const createdDirs: string[] = []
+  const entry: InstalledRedux = {
+    reduxId: redux.id,
+    name: redux.name,
+    installedAt: new Date().toISOString(),
+    version: redux.version,
+    files: installed,
+    createdDirs
+  }
+
   try {
     await downloadToFile(redux.downloadUrl, zipPath)
     await extract(zipPath, { dir: extractedDir })
 
     const stagedFiles = await walk(extractedDir)
-
-    const installed: InstalledFile[] = []
-    const createdDirs: string[] = []
 
     // Track which target dirs already existed so we know what we created.
     const targetDirsInZip = await listDirsInOrder(targetRoot, extractedDir)
@@ -127,7 +142,8 @@ export async function installRedux(redux: Redux): Promise<InstalledRedux> {
 
       const hadOriginal = await fileExists(target)
       if (hadOriginal) {
-        // Stash the original file so uninstall can roll it back.
+        // Stash the original file so uninstall can roll it back. We use rename
+        // (not copy) so even huge files (gigabytes) cost zero extra disk space.
         const backup = target + BACKUP_SUFFIX
         // If a stale backup exists, remove it so rename succeeds on Windows.
         if (await fileExists(backup)) {
@@ -138,6 +154,9 @@ export async function installRedux(redux: Redux): Promise<InstalledRedux> {
 
       await fs.copyFile(src, target)
       installed.push({ path: target, hadOriginal })
+      // Persist after every file: if we crash here, uninstall still finds a
+      // partial manifest and can roll the touched files back.
+      await upsertInstalled(entry)
     }
 
     // After extraction, mark any directories under targetRoot that did NOT exist
@@ -147,21 +166,30 @@ export async function installRedux(redux: Redux): Promise<InstalledRedux> {
         createdDirs.push(d)
       }
     }
-
-    const entry: InstalledRedux = {
-      reduxId: redux.id,
-      name: redux.name,
-      installedAt: new Date().toISOString(),
-      version: redux.version,
-      files: installed,
-      createdDirs
-    }
     await upsertInstalled(entry)
     return entry
+  } catch (err) {
+    // Roll back what we already touched so the user's GTA folder is left clean
+    // and no .reduxbak files are stranded.
+    await rollbackInstall(entry).catch(() => undefined)
+    throw err
   } finally {
     // Best-effort cleanup of staging directory.
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
   }
+}
+
+async function rollbackInstall(entry: InstalledRedux): Promise<void> {
+  for (const f of entry.files) {
+    await fs.unlink(f.path).catch(() => undefined)
+    if (f.hadOriginal) {
+      const backup = f.path + BACKUP_SUFFIX
+      if (await fileExists(backup)) {
+        await fs.rename(backup, f.path).catch(() => undefined)
+      }
+    }
+  }
+  await removeInstalled(entry.reduxId).catch(() => undefined)
 }
 
 export async function uninstallRedux(reduxId: string): Promise<void> {

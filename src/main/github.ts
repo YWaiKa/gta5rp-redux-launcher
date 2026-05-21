@@ -1,6 +1,13 @@
 import { promises as fs } from 'node:fs'
 import { basename, extname } from 'node:path'
-import type { Category, PublishCategoryInput, PublishReduxInput, RemoteData } from '../shared/types'
+import type {
+  Category,
+  PublishCategoryInput,
+  PublishReduxInput,
+  Redux,
+  RemoteData,
+  UpdateReduxInput
+} from '../shared/types'
 import { readConfig, updateConfig } from './store'
 
 const GH_API = 'https://api.github.com'
@@ -285,6 +292,110 @@ export async function publishRedux(
   })
 
   return { downloadUrl, coverUrl, id: reduxId }
+}
+
+interface ExistingRelease {
+  id: number
+  tag_name: string
+  upload_url: string
+}
+
+async function getReleaseByTag(
+  slug: RepoSlug,
+  token: string,
+  tag: string
+): Promise<ExistingRelease | null> {
+  try {
+    return await ghRequest<ExistingRelease>(
+      `${GH_API}/repos/${slug.owner}/${slug.repo}/releases/tags/${encodeURIComponent(tag)}`,
+      { token }
+    )
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('404')) return null
+    throw err
+  }
+}
+
+export async function updateRedux(
+  input: UpdateReduxInput
+): Promise<{ downloadUrl?: string; coverUrl?: string }> {
+  const { backendRepo, githubToken } = await readConfig()
+  if (!githubToken) throw new Error('GitHub token required to update a redux.')
+  const slug = parseRepo(backendRepo)
+
+  // The release we created in publishRedux is tagged `redux-<id>` — find it so
+  // we can attach new assets without making a brand-new release (keeps the
+  // catalog tidy and old install URLs still resolvable in case anyone has them).
+  const tag = `redux-${input.reduxId}`
+  let release = await getReleaseByTag(slug, githubToken, tag)
+  if (!release) {
+    if (input.zipPath || input.coverPath) {
+      const created = await createRelease(slug, githubToken, tag, input.name ?? input.reduxId)
+      release = { id: created.id, tag_name: tag, upload_url: created.upload_url }
+    }
+  }
+
+  let newDownloadUrl: string | undefined
+  let newDownloadSize: number | undefined
+  if (input.zipPath) {
+    if (!release) throw new Error('Internal error: release missing for asset upload.')
+    // Unique asset name so we don't clash with the original asset already on
+    // the release; GitHub rejects duplicate names within a single release.
+    const stamp = Date.now().toString(36)
+    const assetName = `${input.reduxId}-${stamp}${extname(input.zipPath) || '.zip'}`
+    const uploaded = await uploadReleaseAsset(
+      slug,
+      githubToken,
+      release.id,
+      input.zipPath,
+      assetName
+    )
+    newDownloadUrl = uploaded.browser_download_url
+    const stat = await fs.stat(input.zipPath)
+    newDownloadSize = stat.size
+  }
+
+  let newCoverUrl: string | undefined
+  if (input.coverPath) {
+    if (!release) throw new Error('Internal error: release missing for cover upload.')
+    const stamp = Date.now().toString(36)
+    const assetName = `cover-${stamp}${extname(input.coverPath) || '.png'}`
+    const uploaded = await uploadReleaseAsset(
+      slug,
+      githubToken,
+      release.id,
+      input.coverPath,
+      assetName
+    )
+    newCoverUrl = uploaded.browser_download_url
+  }
+
+  await withDataJson(async (data) => {
+    const idx = data.reduxes.findIndex((r) => r.id === input.reduxId)
+    if (idx === -1) {
+      throw new Error(`Redux ${input.reduxId} not found in data.json`)
+    }
+    const prev = data.reduxes[idx]
+    const updated: Redux = {
+      ...prev,
+      categoryId: input.categoryId ?? prev.categoryId,
+      name: input.name?.trim() ? input.name.trim() : prev.name,
+      description: input.description !== undefined ? input.description : prev.description,
+      installTarget: input.installTarget !== undefined ? input.installTarget : prev.installTarget,
+      version: input.version !== undefined ? input.version || undefined : prev.version,
+      author: input.author !== undefined ? input.author || undefined : prev.author,
+      downloadUrl: newDownloadUrl ?? prev.downloadUrl,
+      fileSize: newDownloadSize ?? prev.fileSize,
+      coverUrl: input.removeCover ? undefined : (newCoverUrl ?? prev.coverUrl),
+      uploadedAt: newDownloadUrl ? new Date().toISOString() : prev.uploadedAt
+    }
+    const nextReduxes = [...data.reduxes]
+    nextReduxes[idx] = updated
+    const next: RemoteData = { ...data, reduxes: nextReduxes }
+    return { next, result: undefined, message: `Update redux "${updated.name}" (${updated.id})` }
+  })
+
+  return { downloadUrl: newDownloadUrl, coverUrl: newCoverUrl }
 }
 
 export async function deleteRedux(reduxId: string): Promise<void> {
