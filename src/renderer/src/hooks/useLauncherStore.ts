@@ -126,7 +126,7 @@ export function useLauncherStore(): LauncherStore {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void reloadConfig()
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void reloadInstalled()
   }, [reloadConfig, reloadInstalled])
 

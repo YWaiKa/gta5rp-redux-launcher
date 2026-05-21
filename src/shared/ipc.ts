@@ -22,5 +22,6 @@ export const IPC = {
   publishCategory: 'admin:publishCategory',
   deleteCategory: 'admin:deleteCategory',
   publishRedux: 'admin:publishRedux',
+  updateRedux: 'admin:updateRedux',
   deleteRedux: 'admin:deleteRedux'
 } as const
